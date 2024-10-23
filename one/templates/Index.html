@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Card Scanner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+        }
+        #video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 20px;
+        }
+        #video-feed {
+            width: 640px;
+            height: 480px;
+            border: 2px solid #ccc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #status-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .status-box {
+            width: 300px;
+            padding: 10px;
+            background-color: #fff;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <h1>ID Card Scanner</h1>
+        <button id="start-button">Start</button>
+        <button id="stop-button" disabled>Stop</button>
+        <div id="video-feed">
+            <img id="webcam" src="" alt="Video Feed" width="640" height="480">
+        </div>
+    </div>
+    <div id="status-container">
+        <div class="status-box" id="frame-status">Frame Status: Not Processed</div>
+        <div class="status-box" id="barcode-detection-status">Barcode Detection: Not Detected</div>
+        <div class="status-box" id="barcode-decoding-status">Barcode Decoding: Not Decoded</div>
+        <div class="status-box" id="id-validation-status">ID Validation: Not Validated</div>
+        <div class="status-box" id="barcode-result">Waiting for barcode scan...</div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
+        const videoFeed = document.getElementById('webcam');
+        const frameStatusDiv = document.getElementById('frame-status');
+        const barcodeDetectionStatusDiv = document.getElementById('barcode-detection-status');
+        const barcodeDecodingStatusDiv = document.getElementById('barcode-decoding-status');
+        const idValidationStatusDiv = document.getElementById('id-validation-status');
+        const barcodeResultDiv = document.getElementById('barcode-result');
+
+        async function startScanner() {
+            try {
+                const response = await fetch('/start');
+                const data = await response.json();
+                console.log(data);
+                if (data.status === 'started') {
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    videoFeed.src = '/video_feed';
+                    pollBarcodeResult();
+                    pollProcessingStatus();
+                } else {
+                    alert(data.message || 'Failed to start scanner');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function stopScanner() {
+            try {
+                const response = await fetch('/stop');
+                const data = await response.json();
+                console.log(data);
+                if (data.status === 'stopped') {
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                    videoFeed.src = '';
+                    barcodeResultDiv.textContent = 'Waiting for barcode scan...';
+                    resetStatusBoxes();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Function to poll the barcode result
+        async function pollBarcodeResult() {
+            try {
+                const response = await fetch('/barcode_result');
+                const data = await response.json();
+                if (data.result) {
+                    barcodeResultDiv.textContent = data.result;
+                } else {
+                    barcodeResultDiv.textContent = data.status;
+                }
+                // Poll again after 1 second if the scanner is active
+                if (!startButton.disabled) return;
+                setTimeout(pollBarcodeResult, 1000);
+            } catch (error) {
+                console.error('Error fetching barcode result:', error);
+                barcodeResultDiv.textContent = 'Error fetching barcode result';
+            }
+        }
+
+        // Function to poll the processing status
+        async function pollProcessingStatus() {
+            try {
+                const response = await fetch('/processing_status');
+                const data = await response.json();
+                frameStatusDiv.textContent = `Frame Status: ${data.frame_processed ? "Processed" : "Not Processed"}`;
+                barcodeDetectionStatusDiv.textContent = `Barcode Detection: ${data.barcode_detected ? "Detected" : "Not Detected"}`;
+                barcodeDecodingStatusDiv.textContent = `Barcode Decoding: ${data.barcode_decoded ? "Decoded" : "Not Decoded"}`;
+                idValidationStatusDiv.textContent = `ID Validation: ${data.id_validated ? "Validated" : "Not Validated"}`;
+                // Poll again after 1 second if the scanner is active
+                if (!startButton.disabled) return;
+                setTimeout(pollProcessingStatus, 1000);
+            } catch (error) {
+                console.error('Error fetching processing status:', error);
+            }
+        }
+
+        // Reset status boxes
+        function resetStatusBoxes() {
+            frameStatusDiv.textContent = "Frame Status: Not Processed";
+            barcodeDetectionStatusDiv.textContent = "Barcode Detection: Not Detected";
+            barcodeDecodingStatusDiv.textContent = "Barcode Decoding: Not Decoded";
+            idValidationStatusDiv.textContent = "ID Validation: Not Validated";
+        }
+
+        startButton.addEventListener('click', startScanner);
+        stopButton.addEventListener('click', stopScanner);
+    </script>
+</body>
+</html>
